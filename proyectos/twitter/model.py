@@ -1,4 +1,3 @@
-# model.py
 import mysql.connector
 import uuid
 import time
@@ -51,10 +50,7 @@ def init():
 
 init()
 
-# --- Funciones para Usuarios ---
-
 def addUser(user):
-    # Comprobación de campos obligatorios
     required = ["name", "surname", "email", "password", "nick"]
     for field in required:
         if field not in user:
@@ -66,7 +62,6 @@ def addUser(user):
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     try:
         cur = con.cursor()
-        # Comprobamos si el email o nick ya existen
         cur.execute(f"SELECT * FROM Users WHERE email='{user['email']}' OR nick='{user['nick']}'")
         if cur.fetchone() is not None:
             raise Exception("User already exists")
@@ -86,15 +81,12 @@ def login(email, passwd):
             raise Exception("Wrong authentication")
     finally:
         con.close()
-    # En esta implementación el token es el id del usuario.
     return row[0]
 
 def updateUser(token, new_data):
-    # token es el id del usuario
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     try:
         cur = con.cursor()
-        # Se actualizan solo los campos que se proporcionen
         updates = []
         for key in ["name", "surname", "email", "password", "nick"]:
             if key in new_data:
@@ -104,7 +96,6 @@ def updateUser(token, new_data):
         sql = f"UPDATE Users SET {', '.join(updates)} WHERE id='{token}'"
         cur.execute(sql)
         con.commit()
-        # Devolver el usuario actualizado
         cur.execute(f"SELECT * FROM Users WHERE id='{token}'")
         row = cur.fetchone()
         if row is None:
@@ -131,7 +122,6 @@ def removeUser(token):
     return True
 
 def listUsers(token, query=""):
-    # Se asume que el token ya fue validado (para este laboratorio, no se vuelve a comprobar)
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     users = []
     try:
@@ -156,7 +146,6 @@ def listFollowing(token, query="", ini=0, count=10, sort=""):
     users = []
     try:
         cur = con.cursor()
-        # Se buscan los usuarios seguidos (following) por el usuario autenticado
         sql = f"""SELECT U.id, U.name, U.surname, U.email, U.nick FROM Users U
                   INNER JOIN Following F ON U.id = F.following
                   WHERE F.follower='{token}'"""
@@ -183,7 +172,6 @@ def listFollowers(token, query="", ini=0, count=10, sort=""):
     users = []
     try:
         cur = con.cursor()
-        # Se buscan los usuarios que siguen al usuario autenticado
         sql = f"""SELECT U.id, U.name, U.surname, U.email, U.nick FROM Users U
                   INNER JOIN Following F ON U.id = F.follower
                   WHERE F.following='{token}'"""
@@ -209,16 +197,13 @@ def follow(token, nick):
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     try:
         cur = con.cursor()
-        # Buscar el id del usuario a seguir mediante su nick
         cur.execute(f"SELECT id FROM Users WHERE nick='{nick}'")
         row = cur.fetchone()
         if row is None:
             raise Exception("User to follow not found")
         following_id = row[0]
-        # Evitar seguirse a uno mismo
         if following_id == token:
             raise Exception("Cannot follow yourself")
-        # Comprobar si ya se sigue
         cur.execute(f"SELECT * FROM Following WHERE follower='{token}' AND following='{following_id}'")
         if cur.fetchone() is not None:
             raise Exception("Already following")
@@ -243,7 +228,6 @@ def unfollow(token, nick):
         con.close()
     return True
 
-# --- Funciones para Tweets ---
 
 def addTweet(token, content):
     tweet_id = uuid.uuid4().hex
@@ -253,7 +237,6 @@ def addTweet(token, content):
         cur = con.cursor()
         cur.execute(f"INSERT INTO Tweets VALUES('{tweet_id}', 'tweet', {current_time}, '{content}', '{token}', NULL)")
         con.commit()
-        # Devolver el tweet creado
         return {"id": tweet_id, "type": "tweet", "date": current_time, "content": content, "user": token, "ref": None}
     finally:
         con.close()
@@ -264,7 +247,6 @@ def addRetweet(token, tweetId):
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     try:
         cur = con.cursor()
-        # Se asume que el tweet original existe
         cur.execute(f"SELECT content FROM Tweets WHERE id='{tweetId}'")
         row = cur.fetchone()
         if row is None:
@@ -281,10 +263,8 @@ def listTweets(token, query="", ini=0, count=10, sort=""):
     tweets = []
     try:
         cur = con.cursor()
-        # Se listan los tweets propios y de los usuarios seguidos.
-        # Primero se obtiene la lista de ids de usuarios seguidos
         cur.execute(f"SELECT following FROM Following WHERE follower='{token}'")
-        following = [token]  # incluir al propio usuario
+        following = [token]  
         following.extend([row[0] for row in cur.fetchall()])
         following_list = "', '".join(following)
         sql = f"SELECT * FROM Tweets WHERE user IN ('{following_list}')"
@@ -295,7 +275,6 @@ def listTweets(token, query="", ini=0, count=10, sort=""):
         sql += f" LIMIT {ini}, {count}"
         cur.execute(sql)
         for row in cur.fetchall():
-            # Para cada tweet, se pueden contar likes y dislikes
             tweet = {
                 "id": row[0],
                 "type": row[1],
@@ -304,7 +283,6 @@ def listTweets(token, query="", ini=0, count=10, sort=""):
                 "user": row[4],
                 "ref": row[5]
             }
-            # Contadores de likes y dislikes
             cur.execute(f"SELECT COUNT(*) FROM Likes WHERE tweet='{row[0]}' AND positive=1")
             likes = cur.fetchone()[0]
             cur.execute(f"SELECT COUNT(*) FROM Likes WHERE tweet='{row[0]}' AND positive=0")
@@ -320,7 +298,6 @@ def like(token, tweetId):
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     try:
         cur = con.cursor()
-        # Verificar si ya se ha registrado un like/dislike
         cur.execute(f"SELECT * FROM Likes WHERE user='{token}' AND tweet='{tweetId}'")
         if cur.fetchone() is not None:
             raise Exception("You have already rated this tweet")

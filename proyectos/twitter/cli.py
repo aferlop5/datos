@@ -1,4 +1,3 @@
-# cli.py
 import model
 
 def help():
@@ -61,7 +60,6 @@ while True:
             if token is None:
                 print("ERROR: You must log in first.")
                 continue
-            # Se esperan los 5 parámetros para actualizar (se pueden usar '-' para no modificar un campo)
             if len(cmd) < 6:
                 print("ERROR: Missing parameters for updateUser")
                 continue
@@ -132,7 +130,6 @@ while True:
             if token is None:
                 print("ERROR: You must log in first.")
                 continue
-            # Todo lo que sigue se considera contenido del tweet
             content = " ".join(cmd[1:])
             tweet = model.addTweet(token, content)
             print("Tweet added:", tweet)
