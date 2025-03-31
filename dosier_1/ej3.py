@@ -17,11 +17,10 @@ def help():
 def init():
     con = mysql.connector.connect(
         host="localhost",
-        user="root",  # Cambia esto si usas otro usuario
+        user="root",
         password="root"
     )
     cursor = con.cursor()
-    # Corrected SQL syntax for creating the database
     cursor.execute("CREATE DATABASE IF NOT EXISTS ej3")
     cursor.execute("USE ej3")
     cursor.execute("""
