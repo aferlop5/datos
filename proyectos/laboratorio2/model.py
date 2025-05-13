@@ -32,6 +32,7 @@ def addUser(user):
     return user
 
 def login(email, passwd):
+    print(f"Attempting login with email: {email}, password: {passwd}")
     user = db.Users.find_one({"email": email, "password": passwd})
     if not user:
         raise Exception("Wrong authentication")
