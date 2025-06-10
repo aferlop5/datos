@@ -1,5 +1,4 @@
-import model_rest as rest  # Operaciones para login, list*, get*
-import model_mq as mq      # Operaciones para addUser, updateUser, removeUser, follow, unfollow, addTweet, addRetweet, like, dislike
+import model
 
 def help():
     print('''
@@ -8,7 +7,7 @@ Available commands:
     - exit
     - addUser <name> <surname> <email> <password> <nick>
     - login <email> <password>
-    - updateUser <name> <surname> <email> <password> <nick> (usa "-" para no modificar un campo)
+    - updateUser <name> <surname> <email> <password> <nick>
     - removeUser
     - listUsers [<query>]
     - follow <nick>
@@ -47,14 +46,14 @@ while True:
                 "password": cmd[4],
                 "nick": cmd[5]
             }
-            mq.addUser(user)  # Operación asíncrona
-            print("Solicitud de addUser en cola.")
+            model.addUser(user)
+            print("User added.")
 
         elif cmd[0] == "login":
             if len(cmd) < 3:
                 print("ERROR: Missing parameters for login")
                 continue
-            token = rest.login(cmd[1], cmd[2])
+            token = model.login(cmd[1], cmd[2])
             print("Welcome!")
 
         elif cmd[0] == "updateUser":
@@ -69,23 +68,23 @@ while True:
             for i, field in enumerate(fields, start=1):
                 if cmd[i] != "-":
                     new_data[field] = cmd[i]
-            mq.updateUser(token, new_data)
-            print("Solicitud de updateUser en cola.")
+            updated = model.updateUser(token, new_data)
+            print("User updated:", updated)
 
         elif cmd[0] == "removeUser":
             if token is None:
                 print("ERROR: You must log in first.")
                 continue
-            mq.removeUser(token)
+            model.removeUser(token)
             token = None
-            print("Solicitud de removeUser en cola.")
+            print("User removed.")
 
         elif cmd[0] == "listUsers":
             if token is None:
                 print("ERROR: You must log in first.")
                 continue
             query = cmd[1] if len(cmd) > 1 else ""
-            users = rest.listUsers(token, query)
+            users = model.listUsers(token, query)
             for user in users:
                 print("- " + str(user))
 
@@ -96,8 +95,8 @@ while True:
             if len(cmd) < 2:
                 print("ERROR: Missing parameter for follow")
                 continue
-            mq.follow(token, cmd[1])
-            print("Solicitud de follow en cola.")
+            model.follow(token, cmd[1])
+            print("Now following", cmd[1])
 
         elif cmd[0] == "unfollow":
             if token is None:
@@ -106,15 +105,15 @@ while True:
             if len(cmd) < 2:
                 print("ERROR: Missing parameter for unfollow")
                 continue
-            mq.unfollow(token, cmd[1])
-            print("Solicitud de unfollow en cola.")
+            model.unfollow(token, cmd[1])
+            print("Unfollowed", cmd[1])
 
         elif cmd[0] == "listFollowing":
             if token is None:
                 print("ERROR: You must log in first.")
                 continue
             query = cmd[1] if len(cmd) > 1 else ""
-            users = rest.listFollowing(token, query)
+            users = model.listFollowing(token, query)
             for user in users:
                 print("- " + str(user))
 
@@ -123,7 +122,7 @@ while True:
                 print("ERROR: You must log in first.")
                 continue
             query = cmd[1] if len(cmd) > 1 else ""
-            users = rest.listFollowers(token, query)
+            users = model.listFollowers(token, query)
             for user in users:
                 print("- " + str(user))
 
@@ -132,25 +131,25 @@ while True:
                 print("ERROR: You must log in first.")
                 continue
             content = " ".join(cmd[1:])
-            mq.addTweet(token, content)
-            print("Solicitud de addTweet en cola.")
+            tweet = model.addTweet(token, content)
+            print("Tweet added:", tweet)
 
         elif cmd[0] == "addRetweet":
             if token is None:
                 print("ERROR: You must log in first.")
                 continue
             if len(cmd) < 2:
-                print("ERROR: Missing tweetId for addRetweet")
+                print("ERROR: Missing tweetId for retweet")
                 continue
-            mq.addRetweet(token, cmd[1])
-            print("Solicitud de addRetweet en cola.")
+            retweet = model.addRetweet(token, cmd[1])
+            print("Retweet added:", retweet)
 
         elif cmd[0] == "listTweets":
             if token is None:
                 print("ERROR: You must log in first.")
                 continue
             query = cmd[1] if len(cmd) > 1 else ""
-            tweets = rest.listTweets(token, query)
+            tweets = model.listTweets(token, query)
             for tweet in tweets:
                 print("- " + str(tweet))
 
@@ -161,8 +160,8 @@ while True:
             if len(cmd) < 2:
                 print("ERROR: Missing tweetId for like")
                 continue
-            mq.like(token, cmd[1])
-            print("Solicitud de like en cola.")
+            model.like(token, cmd[1])
+            print("Tweet liked.")
 
         elif cmd[0] == "dislike":
             if token is None:
@@ -171,8 +170,8 @@ while True:
             if len(cmd) < 2:
                 print("ERROR: Missing tweetId for dislike")
                 continue
-            mq.dislike(token, cmd[1])
-            print("Solicitud de dislike en cola.")
+            model.dislike(token, cmd[1])
+            print("Tweet disliked.")
 
         elif cmd[0] == "listLikes":
             if token is None:
@@ -181,7 +180,7 @@ while True:
             if len(cmd) < 2:
                 print("ERROR: Missing tweetId for listLikes")
                 continue
-            users = rest.listLikes(token, cmd[1])
+            users = model.listLikes(token, cmd[1])
             for user in users:
                 print("- " + str(user))
 
@@ -192,7 +191,7 @@ while True:
             if len(cmd) < 2:
                 print("ERROR: Missing tweetId for listDislikes")
                 continue
-            users = rest.listDislikes(token, cmd[1])
+            users = model.listDislikes(token, cmd[1])
             for user in users:
                 print("- " + str(user))
 
