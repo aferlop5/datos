@@ -83,7 +83,40 @@ def login(email, passwd):
         con.close()
     return row[0]
 
+def validateToken(token):
+    """Validates if the token corresponds to an existing user."""
+    con = mysql.connector.connect(user="root", password="root", database="twitter")
+    try:
+        cur = con.cursor()
+        cur.execute(f"SELECT id FROM Users WHERE id='{token}'")
+        if cur.fetchone() is None:
+            raise Exception("Invalid token")
+    finally:
+        con.close()
+
+# Nueva función para verificar si el usuario tiene permiso de acceso al tweet
+def canAccessTweet(token, tweetId):
+    con = mysql.connector.connect(user="root", password="root", database="twitter")
+    try:
+        cur = con.cursor()
+        cur.execute(f"SELECT user FROM Tweets WHERE id='{tweetId}'")
+        row = cur.fetchone()
+        if row is None:
+            raise Exception("Tweet not found")
+        tweet_owner = row[0]
+        if tweet_owner == token:
+            return True
+        # Comprueba que token sigue al usuario del tweet
+        cur.execute(f"SELECT * FROM Following WHERE follower='{token}' AND following='{tweet_owner}'")
+        if cur.fetchone() is None:
+            raise Exception("No tienes permiso para retwittear contenido de este usuario")
+    finally:
+        con.close()
+    return True
+
+
 def updateUser(token, new_data):
+    validateToken(token)   # Se añade validación de token
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     try:
         cur = con.cursor()
@@ -111,11 +144,116 @@ def updateUser(token, new_data):
         con.close()
     return user
 
+
 def removeUser(token):
+    validateToken(token)   # Se añade validación de token
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     try:
         cur = con.cursor()
         cur.execute(f"DELETE FROM Users WHERE id='{token}'")
+        con.commit()
+    finally:
+        con.close()
+    return True
+
+
+def addTweet(token, content):
+    validateToken(token)   # Se añade validación de token
+    tweet_id = uuid.uuid4().hex
+    current_time = int(time.time())
+    con = mysql.connector.connect(user="root", password="root", database="twitter")
+    try:
+        cur = con.cursor()
+        cur.execute(f"INSERT INTO Tweets VALUES('{tweet_id}', 'tweet', {current_time}, '{content}', '{token}', NULL)")
+        con.commit()
+        return {"id": tweet_id, "type": "tweet", "date": current_time, "content": content, "user": token, "ref": None}
+    finally:
+        con.close()
+
+
+def addRetweet(token, tweetId):
+    validateToken(token)                   # Se añade validación de token
+    canAccessTweet(token, tweetId)           # Comprueba que el usuario puede acceder al tweet original
+    tweet_id = uuid.uuid4().hex
+    current_time = int(time.time())
+    con = mysql.connector.connect(user="root", password="root", database="twitter")
+    try:
+        cur = con.cursor()
+        cur.execute(f"SELECT content FROM Tweets WHERE id='{tweetId}'")
+        row = cur.fetchone()
+        if row is None:
+            raise Exception("Original tweet not found")
+        original_content = row[0]
+        cur.execute(f"INSERT INTO Tweets VALUES('{tweet_id}', 'retweet', {current_time}, '{original_content}', '{token}', '{tweetId}')")
+        con.commit()
+        return {"id": tweet_id, "type": "retweet", "date": current_time, "content": original_content, "user": token, "ref": tweetId}
+    finally:
+        con.close()
+
+
+def follow(token, nick):
+    validateToken(token)  # Se añade validación de token
+    con = mysql.connector.connect(user="root", password="root", database="twitter")
+    try:
+        cur = con.cursor()
+        cur.execute(f"SELECT id FROM Users WHERE nick='{nick}'")
+        row = cur.fetchone()
+        if row is None:
+            raise Exception("User to follow not found")
+        following_id = row[0]
+        if following_id == token:
+            raise Exception("Cannot follow yourself")
+        cur.execute(f"SELECT * FROM Following WHERE follower='{token}' AND following='{following_id}'")
+        if cur.fetchone() is not None:
+            raise Exception("Already following")
+        cur.execute(f"INSERT INTO Following VALUES('{token}', '{following_id}')")
+        con.commit()
+    finally:
+        con.close()
+    return True
+
+
+def unfollow(token, nick):
+    validateToken(token)  # Se añade validación de token
+    con = mysql.connector.connect(user="root", password="root", database="twitter")
+    try:
+        cur = con.cursor()
+        cur.execute(f"SELECT id FROM Users WHERE nick='{nick}'")
+        row = cur.fetchone()
+        if row is None:
+            raise Exception("User to unfollow not found")
+        following_id = row[0]
+        cur.execute(f"DELETE FROM Following WHERE follower='{token}' AND following='{following_id}'")
+        con.commit()
+    finally:
+        con.close()
+    return True
+
+
+def like(token, tweetId):
+    validateToken(token)  # Se añade validación de token
+    con = mysql.connector.connect(user="root", password="root", database="twitter")
+    try:
+        cur = con.cursor()
+        cur.execute(f"SELECT * FROM Likes WHERE user='{token}' AND tweet='{tweetId}'")
+        if cur.fetchone() is not None:
+            raise Exception("You have already rated this tweet")
+        cur.execute(f"INSERT INTO Likes VALUES('{token}', '{tweetId}', 1)")
+        con.commit()
+    finally:
+        con.close()
+    return True
+
+
+def dislike(token, tweetId):
+    validateToken(token)  # Se añade validación de token
+    con = mysql.connector.connect(user="root", password="root", database="twitter")
+    try:
+        cur = con.cursor()
+        cur.execute(f"SELECT * FROM Likes WHERE user='{token}' AND tweet='{tweetId}'")
+        if cur.fetchone() is not None:
+            raise Exception("You have already rated this tweet")
+        cur.execute(f"INSERT INTO Likes VALUES('{token}', '{tweetId}', 0)")
         con.commit()
     finally:
         con.close()
@@ -195,70 +333,6 @@ def listFollowers(token, query="", ini=0, count=10, sort=""):
         con.close()
     return users
 
-def follow(token, nick):
-    con = mysql.connector.connect(user="root", password="root", database="twitter")
-    try:
-        cur = con.cursor()
-        cur.execute(f"SELECT id FROM Users WHERE nick='{nick}'")
-        row = cur.fetchone()
-        if row is None:
-            raise Exception("User to follow not found")
-        following_id = row[0]
-        if following_id == token:
-            raise Exception("Cannot follow yourself")
-        cur.execute(f"SELECT * FROM Following WHERE follower='{token}' AND following='{following_id}'")
-        if cur.fetchone() is not None:
-            raise Exception("Already following")
-        cur.execute(f"INSERT INTO Following VALUES('{token}', '{following_id}')")
-        con.commit()
-    finally:
-        con.close()
-    return True
-
-def unfollow(token, nick):
-    con = mysql.connector.connect(user="root", password="root", database="twitter")
-    try:
-        cur = con.cursor()
-        cur.execute(f"SELECT id FROM Users WHERE nick='{nick}'")
-        row = cur.fetchone()
-        if row is None:
-            raise Exception("User to unfollow not found")
-        following_id = row[0]
-        cur.execute(f"DELETE FROM Following WHERE follower='{token}' AND following='{following_id}'")
-        con.commit()
-    finally:
-        con.close()
-    return True
-
-def addTweet(token, content):
-    tweet_id = uuid.uuid4().hex
-    current_time = int(time.time())
-    con = mysql.connector.connect(user="root", password="root", database="twitter")
-    try:
-        cur = con.cursor()
-        cur.execute(f"INSERT INTO Tweets VALUES('{tweet_id}', 'tweet', {current_time}, '{content}', '{token}', NULL)")
-        con.commit()
-        return {"id": tweet_id, "type": "tweet", "date": current_time, "content": content, "user": token, "ref": None}
-    finally:
-        con.close()
-
-def addRetweet(token, tweetId):
-    tweet_id = uuid.uuid4().hex
-    current_time = int(time.time())
-    con = mysql.connector.connect(user="root", password="root", database="twitter")
-    try:
-        cur = con.cursor()
-        cur.execute(f"SELECT content FROM Tweets WHERE id='{tweetId}'")
-        row = cur.fetchone()
-        if row is None:
-            raise Exception("Original tweet not found")
-        original_content = row[0]
-        cur.execute(f"INSERT INTO Tweets VALUES('{tweet_id}', 'retweet', {current_time}, '{original_content}', '{token}', '{tweetId}')")
-        con.commit()
-        return {"id": tweet_id, "type": "retweet", "date": current_time, "content": original_content, "user": token, "ref": tweetId}
-    finally:
-        con.close()
-
 def listTweets(token, query="", ini=0, count=10, sort=""):
     con = mysql.connector.connect(user="root", password="root", database="twitter")
     tweets = []
@@ -294,32 +368,6 @@ def listTweets(token, query="", ini=0, count=10, sort=""):
     finally:
         con.close()
     return tweets
-
-def like(token, tweetId):
-    con = mysql.connector.connect(user="root", password="root", database="twitter")
-    try:
-        cur = con.cursor()
-        cur.execute(f"SELECT * FROM Likes WHERE user='{token}' AND tweet='{tweetId}'")
-        if cur.fetchone() is not None:
-            raise Exception("You have already rated this tweet")
-        cur.execute(f"INSERT INTO Likes VALUES('{token}', '{tweetId}', 1)")
-        con.commit()
-    finally:
-        con.close()
-    return True
-
-def dislike(token, tweetId):
-    con = mysql.connector.connect(user="root", password="root", database="twitter")
-    try:
-        cur = con.cursor()
-        cur.execute(f"SELECT * FROM Likes WHERE user='{token}' AND tweet='{tweetId}'")
-        if cur.fetchone() is not None:
-            raise Exception("You have already rated this tweet")
-        cur.execute(f"INSERT INTO Likes VALUES('{token}', '{tweetId}', 0)")
-        con.commit()
-    finally:
-        con.close()
-    return True
 
 def listLikes(token, tweetId, ini=0, count=10):
     con = mysql.connector.connect(user="root", password="root", database="twitter")
@@ -362,14 +410,3 @@ def listDislikes(token, tweetId, ini=0, count=10):
     finally:
         con.close()
     return users
-
-def validateToken(token):
-    """Validates if the token corresponds to an existing user."""
-    con = mysql.connector.connect(user="root", password="root", database="twitter")
-    try:
-        cur = con.cursor()
-        cur.execute(f"SELECT id FROM Users WHERE id='{token}'")
-        if cur.fetchone() is None:
-            raise Exception("Invalid token")
-    finally:
-        con.close()
